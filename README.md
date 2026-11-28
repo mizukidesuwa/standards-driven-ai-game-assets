@@ -1,40 +1,66 @@
 # Standards-Driven AI for Game UGC
 
-An engineering approach for games that support user-generated content (UGC) made with external AI.
+An engineering approach for bringing AI-assisted user-generated content (UGC) into games.
 
 - **Author** [mizukidesuwa](https://github.com/mizukidesuwa)
 - **Version** 0.1.0
 - **Status** Architecture proposal with a reference implementation
 
-## How it works
+## The game defines what it accepts
 
-**The same specification guides generation and defines what the game accepts.** The game publishes a versioned specification for each supported type of content, along with a prompt based on it. Players give the prompt and a reference or description to an external AI tool of their choice, then bring the result back to the game for import.
+The game publishes a versioned import specification for each type of UGC it supports. The specification says what the content can describe, which file formats players can submit, and what checks an asset must pass before the game loads it.
 
-The specification says what players can change, what format to use, and which limits apply. The game checks the data structure and game-specific rules such as size and complexity. It builds and previews assets that pass. If an import fails, players can use the error message to edit the file or ask the AI tool to try again.
+## Choosing the file format
+
+- Choose a format that can express the choices players can make.
+- Try it with a range of player inputs to see whether existing AI tools can produce usable files, directly or through an exporter.
+- Check that the game can read and load the format and enforce its limits on size, complexity, and supported features.
+
+A game can reuse an existing format when its tools and importer already support it. A game that builds assets from a small set of parameters can also define a format for those inputs.
+
+## Changing the generation workflow
+
+Take a game that accepts GLB models. One tool can produce a `.glb` file directly. Another workflow can use AI to produce parameters for a modeling tool, then export the resulting model to `.glb`. Both files go through the same game importer and checks.
+
+```mermaid
+flowchart TD
+    Spec["Accepted formats and import rules"] --> Direct["Tool produces the file directly"]
+    Spec --> Build["AI assists with asset creation"]
+    Input["Player idea or reference"] --> Direct
+    Input --> Build
+    Build --> Export["Build and export the asset"]
+    Direct --> Candidate["Candidate file"]
+    Export --> Candidate
+    Spec --> Check["Game validates the file"]
+    Candidate --> Check
+    Check -->|Pass| Load["Load and preview"]
+    Check -->|Fail| Error["Show what failed"]
+    Error --> Retry["Player edits the file or tries again"]
+```
+
+For a tool that takes text instructions, the game can publish a prompt based on the specification. Its requirements should match the import checks so players can use an error message to revise the file or try again.
+
+## Reference implementation — FORZERO: BUDGET
+
+FORZERO: BUDGET uses a game-specific JSON format for rider skins. Players copy the workshop prompt and send it to an external AI tool with a reference image. They paste the returned `SkinModelSpec` JSON or select the file, then choose **Import and Preview**. [Game release](https://github.com/mizukidesuwa/forzero-budget/releases/tag/v2.6.5) · [Workshop interface](https://github.com/mizukidesuwa/forzero-budget/blob/1f57d956e5ef5661e597fff937bfa58e12374ba5/src/index.html#L300-L311)
 
 ```mermaid
 flowchart TD
     Spec["Versioned content specification"] --> Prompt["Official prompt"]
     Spec --> Validate["Game import validation"]
     Prompt --> AI["External AI tool"]
-    Input["Player reference or description"] --> AI
-    AI --> Asset["Candidate asset"]
+    Input["Player reference image"] --> AI
+    AI --> Asset["SkinModelSpec JSON"]
     Asset --> Validate
     Validate -->|Accept| Preview["Build and preview in game"]
     Validate -->|Reject| Error["Show import error"]
     Error -->|Player revises or retries| AI
 ```
 
-The prompt needs to reflect the rules the importer actually uses. When a rule changes, update both and check one example that should pass and one that should fail. Each new content type needs its own specification and import checks.
-
-## Reference implementation — FORZERO: BUDGET
-
-FORZERO: BUDGET uses this workflow for rider skins. Players copy the workshop prompt and send it to an external AI tool with a reference image. They paste the returned `SkinModelSpec` JSON or select the file, then choose **Import and Preview**. [Game release](https://github.com/mizukidesuwa/forzero-budget/releases/tag/v2.6.5) · [Workshop interface](https://github.com/mizukidesuwa/forzero-budget/blob/1f57d956e5ef5661e597fff937bfa58e12374ba5/src/index.html#L300-L311)
-
-The JSON describes the rider with colors, proportions, ellipsoids, tubes, and boxes. The importer checks the version, allowed shapes and attachment points, model bounds, and triangle budget. The game builds the rider from the accepted data and applies its existing riding poses. [Official prompt](https://github.com/mizukidesuwa/forzero-budget/blob/1f57d956e5ef5661e597fff937bfa58e12374ba5/src/data/rider-skin-prompt.js) · [Skin validation](https://github.com/mizukidesuwa/forzero-budget/blob/1f57d956e5ef5661e597fff937bfa58e12374ba5/src/ride/rider-skin.js#L537-L609) · [Mesh construction](https://github.com/mizukidesuwa/forzero-budget/blob/1f57d956e5ef5661e597fff937bfa58e12374ba5/src/ride/models.js#L299-L323)
+The game already builds the rider and applies its riding poses. The JSON supplies colors, proportions, and shapes such as ellipsoids, tubes, and boxes. The importer checks the specification version, allowed shapes and attachment points, model bounds, and the estimated triangle count against the budget. [Official prompt](https://github.com/mizukidesuwa/forzero-budget/blob/1f57d956e5ef5661e597fff937bfa58e12374ba5/src/data/rider-skin-prompt.js) · [Skin validation](https://github.com/mizukidesuwa/forzero-budget/blob/1f57d956e5ef5661e597fff937bfa58e12374ba5/src/ride/rider-skin.js#L537-L609) · [Mesh construction](https://github.com/mizukidesuwa/forzero-budget/blob/1f57d956e5ef5661e597fff937bfa58e12374ba5/src/ride/models.js#L299-L323)
 
 ## Evaluating the workflow
 
-To see whether the prompt helps, use the same references across at least two AI tools. For each tool, compare a basic request with the official prompt while keeping the task, output format, and settings fixed. Record the first-pass import rate, retries, and manual edits. In the game, check which features of the reference the imported skin preserves.
+Choose one type of UGC and one delivery format. Give two generation workflows the same set of player inputs and run the results through the same game importer. Record the first-pass import rate, the manual changes needed, and how closely the accepted result matches the player's input in the game.
 
-For each published example, include the reference, exact prompt, unedited JSON, and a screenshot of the preview or the text of the import error.
+For each example, publish the original input, the tool and instructions used, the unedited file, and a screenshot of the preview or the text of the import error.
